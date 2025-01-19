@@ -474,6 +474,8 @@ class MPV:
             args = data["args"]
             if len(args) == 2 and args[0] == "custom-bind":
                 self.event_handler.put_task(self.key_bindings[args[1]]["callback"])
+            if len(args) >= 2 and args[0] == "input-event":
+                self.event_handler.put_task(self._input_event_handler, args[1], args[2:])
 
     def _quit_callback(self):
         """
@@ -619,6 +621,50 @@ class MPV:
         observer_id = self.bind_property_observer(name, handler)
         event.wait()
         self.unbind_property_observer(observer_id)
+
+    def get_input(self, prompt="User input:", items=None):
+        """
+        Open console to get input from user. Only available for mpv 0.38 and above.
+        If closed from mpv without submitting input returns None.
+
+        *prompt* is a string displayed before the input field.
+        *items* (only use with input_select) is a list of options from which the user can choose.
+        """
+        args = {
+            "prompt": prompt
+        }
+        if items:
+            args["items"] = items
+        json_args = json.dumps(args)
+        self.command("set_property", "user-data/{0}/input".format(self.client_name), True)
+        self.command("script-message-to", "console", "get-input", self.client_name, json_args)
+        self.wait_for_property("user-data/{0}/input".format(self.client_name))
+        input_reply = self.command("get_property", "user-data/{0}/input".format(self.client_name))
+        return input_reply
+
+    def input_select(self, prompt, items):
+        """
+        Open console to let user choose from a list of options. 
+        Returns index of the selected item. Only available for mpv 0.38 and above.
+        If closed from mpv without submitting input returns None.
+
+        *prompt* is a string displayed before the input field.
+        *items* is a list of options from which the user can choose.
+        """
+        select_reply = self.get_input(prompt, items)
+        if select_reply:
+            return int(self.get_input(prompt, items))-1
+
+    def _input_event_handler(self, msg_type, args):
+        if msg_type == "submit":
+            line = json.loads(args[0])[0]
+            self.command("set_property", "user-data/{0}/input".format(self.client_name), line)
+            self.command("script-message-to", "console", "disable")
+        elif msg_type == "closed":
+            input_reply = self.command("get_property", "user-data/{0}/input".format(self.client_name))
+            if isinstance(input_reply, bool):
+                self.command("set_property", "user-data/{0}/input".format(self.client_name), None)
+
 
     def _get_wrapper(self, name):
         def wrapper(*args):
