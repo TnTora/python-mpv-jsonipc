@@ -474,8 +474,6 @@ class MPV:
             args = data["args"]
             if len(args) == 2 and args[0] == "custom-bind":
                 self.event_handler.put_task(self.key_bindings[args[1]]["callback"])
-            if len(args) >= 2 and args[0] == "input-event":
-                self.event_handler.put_task(self._input_event_handler, args[1], args[2:])
 
     def _quit_callback(self):
         """
@@ -622,6 +620,11 @@ class MPV:
         event.wait()
         self.unbind_property_observer(observer_id)
 
+    def _register_input_event(self, data):
+        args = data["args"]
+        if len(args) >= 2 and args[0] == "input-event":
+            self.event_handler.put_task(self._input_event_handler, args[1], args[2:])
+
     def get_input(self, prompt="User input:", items=None):
         """
         Open console to get input from user. Only available for mpv 0.38 and above.
@@ -630,6 +633,7 @@ class MPV:
         *prompt* is a string displayed before the input field.
         *items* (only use with input_select) is a list of options from which the user can choose.
         """
+        self.bind_event("client-message", self._register_input_event)
         args = {
             "prompt": prompt
         }
@@ -657,14 +661,12 @@ class MPV:
 
     def _input_event_handler(self, msg_type, args):
         if msg_type == "submit":
+            self.event_bindings["client-message"].remove(self._register_input_event)
             line = json.loads(args[0])[0]
             self.command("set_property", "user-data/{0}/input".format(self.client_name), line)
             self.command("script-message-to", "console", "disable")
         elif msg_type == "closed":
-            input_reply = self.command("get_property", "user-data/{0}/input".format(self.client_name))
-            if isinstance(input_reply, bool):
-                self.command("set_property", "user-data/{0}/input".format(self.client_name), None)
-
+            self.command("set_property", "user-data/{0}/input".format(self.client_name), None)
 
     def _get_wrapper(self, name):
         def wrapper(*args):
