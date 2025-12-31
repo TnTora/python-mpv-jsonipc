@@ -452,10 +452,14 @@ class MPV:
         self._dir = list(self.properties)
         self._dir.extend(object.__dir__(self))
 
+        self.client_name = self.command("client_name")
+
         self.observer_id = 1
         self.observer_lock = threading.Lock()
         self.keybind_id = 1
         self.keybind_lock = threading.Lock()
+
+        self.keybind_update_timer = threading.Timer(0.1, self.event_handler.put_task, args=(self._update_key_bindings,))
 
         if log_handler is not None and loglevel is not None:
             self.command("request_log_messages", loglevel)
@@ -472,7 +476,7 @@ class MPV:
         def client_message_handler(data):
             args = data["args"]
             if len(args) == 2 and args[0] == "custom-bind":
-                self.event_handler.put_task(self.key_bindings[args[1]])
+                self.event_handler.put_task(self.key_bindings[args[1]]["callback"])
 
     def _quit_callback(self):
         """
@@ -511,7 +515,7 @@ class MPV:
         """An alias for on_event to maintain compatibility with python-mpv."""
         return self.on_event(name)
 
-    def on_key_press(self, name):
+    def on_key_press(self, name, repeatable=False, forced=False):
         """
         Decorator to bind a callback to an MPV keypress event.
 
@@ -520,29 +524,64 @@ class MPV:
             pass
         """
         def wrapper(func):
-            self.bind_key_press(name, func)
+            self.bind_key_press(name, func, repeatable, forced)
             return func
         return wrapper
 
-    def bind_key_press(self, name, callback):
+    def bind_key_press(self, name, callback, repeatable=False, forced=False):
         """
         Bind a callback to an MPV keypress event.
 
         *name* is the key symbol.
         *callback()* is the function to call.
+        *repeatable* if True keeps calling callback() repeatedly while the key is held down.
+        *forced* behave similiarly to mp.add_forced_key_binding
         """
         self.keybind_lock.acquire()
         keybind_id = self.keybind_id
         self.keybind_id += 1
         self.keybind_lock.release()
 
-        bind_name = "bind{0}".format(keybind_id)
-        self.key_bindings["bind{0}".format(keybind_id)] = callback
-        try:
-            self.keybind(name, "script-message custom-bind {0}".format(bind_name))
-        except MPVError:
-            self.define_section(bind_name, "{0} script-message custom-bind {1}".format(name, bind_name))
-            self.enable_section(bind_name)
+        prefix = ""
+        if repeatable:
+            prefix += "repeatable"
+
+        bind_name = "{0}_bind{1}".format(callback.__name__, keybind_id)
+        self.key_bindings[bind_name] = {
+            "key": name,
+            "prefix": prefix,
+            "callback": callback,
+            "forced": forced,
+        }
+
+        if forced:
+            self._start_forced_key_bindings_update()
+        else:
+            try:
+                self.keybind(name, "{0} script-message-to {1} custom-bind {2}".format(prefix, self.client_name, bind_name))
+            except MPVError:
+                self.define_section(bind_name, "{0} {1} script-message-to {3} custom-bind {4}".format(name, prefix, self.client_name, bind_name))
+                self.enable_section(bind_name)
+
+        return bind_name
+
+    def remove_key_binding(self, name):
+        del self.key_bindings[name]
+        self._start_forced_key_bindings_update()
+
+    def _start_forced_key_bindings_update(self):
+        self.keybind_update_timer.cancel()
+        self.keybind_update_timer = threading.Timer(0.1, self.event_handler.put_task, args=(self._update_key_bindings,))
+        self.keybind_update_timer.start()
+
+    def _update_key_bindings(self):
+        section = ""
+        for bind_name, opt in self.key_bindings.items():
+            if not opt["forced"]:
+                continue
+            section += "{0} {1} script-message-to {2} custom-bind {3}\n".format(opt["key"], opt["prefix"], self.client_name, bind_name)
+        self.define_section("input_forced_{}".format(self.client_name), section, "force")
+        self.enable_section("input_forced_{}".format(self.client_name), "allow-hide-cursor+allow-vo-dragging")
 
     def bind_property_observer(self, name, callback):
         """
