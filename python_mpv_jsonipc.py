@@ -566,6 +566,11 @@ class MPV:
         return bind_name
 
     def remove_key_binding(self, name):
+        """
+        Remove a previously registered key binding.
+
+        name is the string returned from 'bind_key_press'
+        """
         del self.key_bindings[name]
         self._start_forced_key_bindings_update()
 
