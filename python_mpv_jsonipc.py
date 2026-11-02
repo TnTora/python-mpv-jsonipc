@@ -1187,7 +1187,7 @@ class MPV:
             try:
                 self.keybind(name, "{0} script-message-to {1} custom-bind {2}".format(prefix, self.client_name, bind_name))
             except MPVError:
-                self.define_section(bind_name, "{0} {1} script-message-to {3} custom-bind {4}".format(name, prefix, self.client_name, bind_name))
+                self.define_section(bind_name, "{0} {1} script-message-to {2} custom-bind {3}".format(name, prefix, self.client_name, bind_name))
                 self.enable_section(bind_name)
 
         return bind_name
