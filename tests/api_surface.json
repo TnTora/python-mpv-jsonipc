@@ -18,15 +18,16 @@
       "methods": {
         "__init__": "(self, start_mpv=True, ipc_socket=None, mpv_location=None, log_handler=None, loglevel=None, quit_callback=None, start_retries=5, start_retry_delay_ms=1000, diagnose_start_failures=True, discard_output=False, **kwargs)",
         "bind_event": "(self, name, callback)",
-        "bind_key_press": "(self, name, callback)",
+        "bind_key_press": "(self, name, callback, repeatable=False, forced=False)",
         "bind_property_observer": "(self, name, callback)",
         "command": "(self, command, *args)",
         "command_async": "(self, command, *args, callback=None)",
         "event_callback": "(self, name)",
         "on_event": "(self, name)",
-        "on_key_press": "(self, name)",
+        "on_key_press": "(self, name, repeatable=False, forced=False)",
         "play": "(self, url)",
         "property_observer": "(self, name)",
+        "remove_key_binding": "(self, name)",
         "terminate": "(self, join=True)",
         "unbind_property_observer": "(self, observer_id)",
         "wait_for_property": "(self, name)"
