@@ -1086,7 +1086,7 @@ class MPV:
         self.keybind_id = 1
         self.keybind_lock = threading.Lock()
 
-        self.keybind_update_timer = threading.Timer(0.1, self._update_key_bindings)
+        self.keybind_update_timer = threading.Timer(0.1, self._update_forced_key_bindings)
 
         if log_handler is not None and loglevel is not None:
             self.command("request_log_messages", loglevel)
@@ -1203,10 +1203,10 @@ class MPV:
 
     def _start_forced_key_bindings_update(self):
         self.keybind_update_timer.cancel()
-        self.keybind_update_timer = threading.Timer(0.1, self._update_key_bindings)
+        self.keybind_update_timer = threading.Timer(0.1, self._update_forced_key_bindings)
         self.keybind_update_timer.start()
 
-    def _update_key_bindings(self):
+    def _update_forced_key_bindings(self):
         section = ""
         for bind_name, opt in self.key_bindings.items():
             if not opt["forced"]:
